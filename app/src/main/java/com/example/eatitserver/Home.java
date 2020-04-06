@@ -5,6 +5,7 @@ import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
 import android.view.LayoutInflater;
+import android.view.MenuItem;
 import android.view.View;
 import android.view.Menu;
 import android.view.ViewGroup;
@@ -250,17 +251,19 @@ public class Home extends AppCompatActivity {
                 holder.txtMenuName.setText(model.getName());
                 Picasso.get().load(model.getImage()).into(holder.imageView);
                 final Category clickItem = model;
-                /*
                 holder.setItemClickListener(new ItemClickListener() {
+
                     @Override
                     public void onClick(View view, int position, boolean isLongClick) {
+                        /* Implement later
                         //Get category ID and send to new Activity for showing those foods
                         Intent foodList = new Intent(Home.this, FoodList.class);
                         //categoryId is the key, just get key of item at this position
                         foodList.putExtra("CategoryId", adapter.getRef(position).getKey());
                         startActivity(foodList);
+                         */
                     }
-                });*/
+                });
             }
 
             @NonNull
@@ -298,4 +301,121 @@ public class Home extends AppCompatActivity {
         return NavigationUI.navigateUp(navController, mAppBarConfiguration)
                 || super.onSupportNavigateUp();
     }
+
+    //Update/Delete functions from context menu
+
+    @Override
+    public boolean onContextItemSelected(@NonNull MenuItem item) {
+
+        if(item.getTitle().equals(Common.UPDATE))
+        {
+            showUpdateDialog(adapter.getRef(item.getOrder()).getKey(),adapter.getItem(item.getOrder()));
+        }
+        else if (item.getTitle().equals(Common.DELETE))
+        {
+            deleteCategory(adapter.getRef(item.getOrder()).getKey());
+        }
+
+        return super.onContextItemSelected(item);
+    }
+
+    private void deleteCategory(String key) {
+        //delete child node from database
+        category.child(key).removeValue();
+        Toast.makeText(this,"Item Deleted", Toast.LENGTH_SHORT).show();
+    }
+
+    private void showUpdateDialog(final String key, final Category item) {
+        //modified from showDialog()
+        final AlertDialog.Builder alertDialog = new AlertDialog.Builder(Home.this);
+        alertDialog.setTitle("Edit Category");
+        alertDialog.setMessage("Please Enter Category Information");
+        //inflate add new menu layout
+        LayoutInflater inflater = this.getLayoutInflater();
+        View add_menu_layout = inflater.inflate(R.layout.add_new_menu_layout,null);
+        //init buttons and category name edit text
+        edtName = add_menu_layout.findViewById(R.id.edtName);
+        selectBtn = add_menu_layout.findViewById(R.id.selectBtn);
+        uploadBtn = add_menu_layout.findViewById(R.id.uploadBtn);
+
+        //set default name
+        edtName.setText(item.getName());
+
+        //event listener for button
+        selectBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                imageSelect();
+            }
+        });
+
+        uploadBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                changeImage(item);
+            }
+        });
+
+        alertDialog.setView(add_menu_layout);
+        alertDialog.setIcon(R.drawable.ic_playlist_add_black_24dp);
+
+        //set buttons for alert dialog
+        alertDialog.setPositiveButton("YES", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                dialog.dismiss();
+                //update name
+               item.setName(edtName.getText().toString());
+               category.child(key).setValue(item);
+
+
+            }
+        });
+        alertDialog.setNegativeButton("NO", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                dialog.dismiss();
+            }
+        });
+        alertDialog.show();
+    }
+
+    private void changeImage(final Category item) {
+        if(saveUri != null)
+        {
+            final ProgressBar mProgress = new ProgressBar(this);
+            String imageName = UUID.randomUUID().toString();
+            final StorageReference imageFolder = storageReference.child("images/"+imageName);
+            imageFolder.putFile(saveUri)
+                    .addOnSuccessListener(new OnSuccessListener<UploadTask.TaskSnapshot>() {
+                        @Override
+                        public void onSuccess(UploadTask.TaskSnapshot taskSnapshot) {
+                            Toast.makeText(Home.this, "Upload Successful",
+                                    Toast.LENGTH_SHORT).show();
+                            imageFolder.getDownloadUrl().addOnSuccessListener(new OnSuccessListener<Uri>() {
+                                @Override
+                                public void onSuccess(Uri uri) {
+                                    //set value for Category
+                                    item.setImage(uri.toString());
+                                }
+                            });
+                        }
+                    }).addOnFailureListener(new OnFailureListener() {
+                @Override
+                public void onFailure(@NonNull Exception e) {
+                    Toast.makeText(Home.this,""+e.getMessage(),
+                            Toast.LENGTH_SHORT).show();
+                }
+            }).addOnProgressListener(new OnProgressListener<UploadTask.TaskSnapshot>() {
+                @Override
+                public void onProgress(@NonNull UploadTask.TaskSnapshot taskSnapshot) {
+                    double progress =
+                            (100.0 * (taskSnapshot.getBytesTransferred()
+                                    / taskSnapshot.getTotalByteCount()));
+                    mProgress.setProgress(((int) progress),true);
+                }
+            });
+        }
+    }
+
 }
